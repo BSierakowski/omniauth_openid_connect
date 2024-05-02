@@ -252,15 +252,19 @@ module OmniAuth
       end
 
       def user_info
-        return @user_info if @user_info
+        # return nil for the user_info method to prevent the gem from making a request to the userinfo endpoint in our
+        # ADFS environment.
+        nil
 
-        if access_token.id_token
-          decoded = decode_id_token(access_token.id_token).raw_attributes
-
-          @user_info = ::OpenIDConnect::ResponseObject::UserInfo.new access_token.userinfo!.raw_attributes.merge(decoded)
-        else
-          @user_info = access_token.userinfo!
-        end
+        # return @user_info if @user_info
+        #
+        # if access_token.id_token
+        #   decoded = decode_id_token(access_token.id_token).raw_attributes
+        #
+        #   @user_info = ::OpenIDConnect::ResponseObject::UserInfo.new access_token.userinfo!.raw_attributes.merge(decoded)
+        # else
+        #   @user_info = access_token.userinfo!
+        # end
       end
 
       def access_token
