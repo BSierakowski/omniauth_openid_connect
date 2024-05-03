@@ -102,20 +102,28 @@ module OmniAuth
       end
 
       def client
+        Rails.logger.debug "OIDC METHOD: client, client_options: #{client_options}"
+
         @client ||= ::OpenIDConnect::Client.new(client_options)
       end
 
       def config
+        Rails.logger.debug "OIDC METHOD: config, options.issuer: #{options.issuer}"
+
         @config ||= ::OpenIDConnect::Discovery::Provider::Config.discover!(options.issuer)
       end
 
       def request_phase
+        Rails.logger.debug "OIDC METHOD: request_phase, options.issuer: #{options.issuer}"
+
         options.issuer = issuer if options.issuer.to_s.empty?
         discover!
         redirect authorize_uri
       end
 
       def callback_phase
+        Rails.logger.debug "OIDC METHOD: callback_phase, options.issuer: #{options.issuer}, error: #{params['error']}, error_reason: #{params['error_reason']}, error_uri: #{params['error_uri']}, state: #{params['state']}, stored_state: #{stored_state}, valid_response_type: #{valid_response_type?}, configured_response_type: #{configured_response_type}, id_token: #{params['id_token']}, authorization_code: #{authorization_code}"
+
         error = params['error_reason'] || params['error']
         error_description = params['error_description'] || params['error_reason']
         invalid_state = (options.require_state && params['state'].to_s.empty?) || params['state'] != stored_state
@@ -147,6 +155,8 @@ module OmniAuth
       end
 
       def other_phase
+        Rails.logger.debug "OIDC METHOD: other_phase, current_path: #{current_path}, logout_path_pattern: #{logout_path_pattern}"
+
         if logout_path_pattern.match?(current_path)
           options.issuer = issuer if options.issuer.to_s.empty?
           discover!
@@ -156,10 +166,14 @@ module OmniAuth
       end
 
       def authorization_code
+        Rails.logger.debug "OIDC METHOD: authorization_code, params['code']: #{params['code']}"
+
         params['code']
       end
 
       def end_session_uri
+        Rails.logger.debug "OIDC METHOD: end_session_uri, end_session_endpoint_is_valid?: #{end_session_endpoint_is_valid?}"
+
         return unless end_session_endpoint_is_valid?
 
         end_session_uri = URI(client_options.end_session_endpoint)
@@ -168,6 +182,8 @@ module OmniAuth
       end
 
       def authorize_uri
+        Rails.logger.debug "OIDC METHOD: authorize_uri, options.response_type: #{options.response_type}, options.response_mode: #{options.response_mode}, options.scope: #{options.scope}, options.state: #{options.state}, options.prompt: #{options.prompt}, options.send_nonce: #{options.send_nonce}, options.hd: #{options.hd}, options.acr_values: #{options.acr_values}, options.extra_authorize_params: #{options.extra_authorize_params}, options.allow_authorize_params: #{options.allow_authorize_params}, options.pkce: #{options.pkce}, options.pkce_verifier: #{options.pkce_verifier}, options.pkce_options: #{options.pkce_options}, new_state: #{new_state}, new_nonce: #{new_nonce}, redirect_uri: #{redirect_uri}"
+
         client.redirect_uri = redirect_uri
         opts = {
           response_type: options.response_type,
@@ -200,6 +216,8 @@ module OmniAuth
       end
 
       def public_key
+        Rails.logger.debug "OIDC METHOD: public_key, options.discovery: #{options.discovery}, configured_public_key: #{configured_public_key}, client_options.jwks_uri: #{client_options.jwks_uri}, fetch_key: #{fetch_key}"
+
         @public_key ||= if options.discovery
                           config.jwks
                         elsif configured_public_key
@@ -212,10 +230,14 @@ module OmniAuth
       # Some OpenID providers use the OAuth2 client secret as the shared secret, but
       # Keycloak uses a separate key that's stored inside the database.
       def secret
+        Rails.logger.debug "OIDC METHOD: secret, base64_decoded_jwt_secret: #{base64_decoded_jwt_secret}, client_options.secret: #{client_options.secret}"
+
         base64_decoded_jwt_secret || client_options.secret
       end
 
       def pkce_authorize_params(verifier)
+        Rails.logger.debug "OIDC METHOD: pkce_authorize_params, verifier: #{verifier}, options.pkce_options[:code_challenge].call(verifier): #{options.pkce_options[:code_challenge].call(verifier)}, options.pkce_options[:code_challenge_method]: #{options.pkce_options[:code_challenge_method]}"
+
         # NOTE: see https://tools.ietf.org/html/rfc7636#appendix-A
         {
           code_challenge: options.pkce_options[:code_challenge].call(verifier),
@@ -226,22 +248,30 @@ module OmniAuth
       private
 
       def fetch_key
+        Rails.logger.debug "OIDC METHOD: fetch_key"
+
         @fetch_key ||= parse_jwk_key(::OpenIDConnect.http_client.get_content(client_options.jwks_uri))
       end
 
       def base64_decoded_jwt_secret
+        Rails.logger.debug "OIDC METHOD: base64_decoded_jwt_secret, options.jwt_secret_base64: #{options.jwt_secret_base}"
+
         return unless options.jwt_secret_base64
 
         Base64.decode64(options.jwt_secret_base64)
       end
 
       def issuer
+        Rails.logger.debug "OIDC METHOD: issuer, client_options.scheme: #{client_options.scheme}, client_options.host: #{client_options.host}, client_options.port: #{client_options.port}"
+
         resource = "#{ client_options.scheme }://#{ client_options.host }"
         resource = "#{ resource }:#{ client_options.port }" if client_options.port
         ::OpenIDConnect::Discovery::Provider.discover!(resource).issuer
       end
 
       def discover!
+        Rails.logger.debug "OIDC METHOD: discover!, options.discovery: #{options.discovery}, client_options.authorization_endpoint: #{client_options.authorization_endpoint}, client_options.token_endpoint: #{client_options.token_endpoint}, client_options.userinfo_endpoint: #{client_options.userinfo_endpoint}, client_options.jwks_uri: #{client_options.jwks_uri}, client_options.end_session_endpoint: #{client_options.end_session_endpoint}"
+
         return unless options.discovery
 
         client_options.authorization_endpoint = config.authorization_endpoint
@@ -252,6 +282,8 @@ module OmniAuth
       end
 
       def user_info
+        Rails.logger.debug "OIDC METHOD: user_info"
+
         # return nil for the user_info method to prevent the gem from making a request to the userinfo endpoint in our
         # ADFS environment.
         nil
@@ -268,6 +300,8 @@ module OmniAuth
       end
 
       def access_token
+        Rails.logger.debug "OIDC METHOD: access_token, @access_token: #{@access_token}, token_request_params: #{token_request_params}"
+
         return @access_token if @access_token
 
         token_request_params = {
@@ -292,6 +326,8 @@ module OmniAuth
       # limitation in the openid_connect gem:
       # https://github.com/nov/openid_connect/issues/61
       def decode_id_token(id_token)
+        Rails.logger.debug "OIDC METHOD: decode_id_token, id_token: #{id_token}, public_key: #{public_key}, secret: #{secret}"
+
         decoded = JSON::JWT.decode(id_token, :skip_verification)
         algorithm = decoded.algorithm.to_sym
 
@@ -325,6 +361,8 @@ module OmniAuth
       # If client_signing_alg is specified, we check that the returned JWT
       # matches the expected algorithm. If not, we reject it.
       def validate_client_algorithm!(algorithm)
+        Rails.logger.debug "OIDC METHOD: validate_client_algorithm!, algorithm: #{algorithm}, options.client_signing_alg: #{options.client_signing_alg}"
+
         client_signing_alg = options.client_signing_alg&.to_sym
 
         return unless client_signing_alg
@@ -335,10 +373,14 @@ module OmniAuth
       end
 
       def decode!(id_token, key)
+        Rails.logger.debug "OIDC METHOD: decode!, id_token: #{id_token}, key: #{key}"
+
         ::OpenIDConnect::ResponseObject::IdToken.decode(id_token, key)
       end
 
       def decode_with_each_key!(id_token, keyset)
+        Rails.logger.debug "OIDC METHOD: decode_with_each_key!, id_token: #{id_token}, keyset: #{keyset}"
+
         return unless keyset.is_a?(JSON::JWK::Set)
 
         keyset.each do |key|
@@ -355,10 +397,14 @@ module OmniAuth
       end
 
       def client_options
+        Rails.logger.debug "OIDC METHOD: client_options"
+
         options.client_options
       end
 
       def new_state
+        Rails.logger.debug "OIDC METHOD: new_state, options.state: #{options.state}, stored_state: #{stored_state}"
+
         state = if options.state.respond_to?(:call)
                   if options.state.arity == 1
                     options.state.call(env)
@@ -370,30 +416,42 @@ module OmniAuth
       end
 
       def stored_state
+        Rails.logger.debug "OIDC METHOD: stored_state"
+
         session.delete('omniauth.state')
       end
 
       def new_nonce
+        Rails.logger.debug "OIDC METHOD: new_nonce"
+
         session['omniauth.nonce'] = SecureRandom.hex(16)
       end
 
       def stored_nonce
+        Rails.logger.debug "OIDC METHOD: stored_nonce"
+
         session.delete('omniauth.nonce')
       end
 
       def script_name
+        Rails.logger.debug "OIDC METHOD: script_name"
+
         return '' if @env.nil?
 
         super
       end
 
       def session
+        Rails.logger.debug "OIDC METHOD: session"
+
         return {} if @env.nil?
 
         super
       end
 
       def configured_public_key
+        Rails.logger.debug "OIDC METHOD: configured_public_key, options.client_jwk_signing_key: #{options.client_jwk_signing_key}, options.client_x509_signing_key: #{options.client_x509_signing_key}"
+
         @configured_public_key ||= if options.client_jwk_signing_key
                                      parse_jwk_key(options.client_jwk_signing_key)
                                    elsif options.client_x509_signing_key
@@ -402,10 +460,14 @@ module OmniAuth
       end
 
       def parse_x509_key(key)
+        Rails.logger.debug "OIDC METHOD: parse_x509_key, key: #{key}"
+
         OpenSSL::X509::Certificate.new(key).public_key
       end
 
       def parse_jwk_key(key)
+        Rails.logger.debug "OIDC METHOD: parse_jwk_key, key: #{key}"
+
         json = JSON.parse(key)
         return JSON::JWK::Set.new(json['keys']) if json.key?('keys')
 
@@ -413,16 +475,22 @@ module OmniAuth
       end
 
       def decode(str)
+        Rails.logger.debug "OIDC METHOD: decode, str: #{str}"
+
         UrlSafeBase64.decode64(str).unpack1('B*').to_i(2).to_s
       end
 
       def redirect_uri
+        Rails.logger.debug "OIDC METHOD: redirect_uri, client_options.redirect_uri: #{client_options.redirect_uri}, params['redirect_uri']: #{params['redirect_uri']}"
+
         return client_options.redirect_uri unless params['redirect_uri']
 
         "#{ client_options.redirect_uri }?redirect_uri=#{ CGI.escape(params['redirect_uri']) }"
       end
 
       def encoded_post_logout_redirect_uri
+        Rails.logger.debug "OIDC METHOD: encoded_post_logout_redirect_uri, options.post_logout_redirect_uri: #{options.post_logout_redirect_uri}"
+
         return unless options.post_logout_redirect_uri
 
         URI.encode_www_form(
@@ -431,15 +499,21 @@ module OmniAuth
       end
 
       def end_session_endpoint_is_valid?
+        Rails.logger.debug "OIDC METHOD: end_session_endpoint_is_valid?, client_options.end_session_endpoint: #{client_options.end_session_endpoint}"
+
         client_options.end_session_endpoint &&
           client_options.end_session_endpoint =~ URI::DEFAULT_PARSER.make_regexp
       end
 
       def logout_path_pattern
+        Rails.logger.debug "OIDC METHOD: logout_path_pattern, request_path: #{request_path}"
+
         @logout_path_pattern ||= %r{\A#{Regexp.quote(request_path)}(/logout)}
       end
 
       def id_token_callback_phase
+        Rails.logger.debug "OIDC METHOD: id_token_callback_phase, params['id_token']: #{params['id_token']}"
+
         user_data = decode_id_token(params['id_token']).raw_attributes
         env['omniauth.auth'] = AuthHash.new(
           provider: name,
@@ -451,6 +525,8 @@ module OmniAuth
       end
 
       def valid_response_type?
+        Rails.logger.debug "OIDC METHOD: valid_response_type?, params.key?(configured_response_type): #{params.key?(configured_response_type)}, error_attrs: #{RESPONSE_TYPE_EXCEPTIONS[configured_response_type]}"
+
         return true if params.key?(configured_response_type)
 
         error_attrs = RESPONSE_TYPE_EXCEPTIONS[configured_response_type]
@@ -460,10 +536,14 @@ module OmniAuth
       end
 
       def configured_response_type
+        Rails.logger.debug "OIDC METHOD: configured_response_type, options.response_type: #{options.response_type}"
+
         @configured_response_type ||= options.response_type.to_s
       end
 
       def verify_id_token!(id_token)
+        Rails.logger.debug "OIDC METHOD: verify_id_token!, id_token: #{id_token}, options.issuer: #{options.issuer}, client_options.identifier: #{client_options.identifier}, params['nonce']: #{params['nonce']}, stored_nonce: #{stored_nonce}"
+
         return unless id_token
 
         decode_id_token(id_token).verify!(issuer: options.issuer,
@@ -475,6 +555,8 @@ module OmniAuth
         attr_accessor :error, :error_reason, :error_uri
 
         def initialize(data)
+          Rails.logger.debug "OIDC METHOD: CallbackError, data: #{data}"
+
           super
           self.error = data[:error]
           self.error_reason = data[:reason]
@@ -482,6 +564,8 @@ module OmniAuth
         end
 
         def message
+          Rails.logger.debug "OIDC METHOD: callback error message, error: #{error}, error_reason: #{error_reason}, error_uri: #{error_uri}"
+
           [error, error_reason, error_uri].compact.join(' | ')
         end
       end
